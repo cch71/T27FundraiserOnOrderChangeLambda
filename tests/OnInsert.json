@@ -1,0 +1,178 @@
+[
+{
+    "eventID": "ec88808b0ec6b1e5bfbf45ecfb0612db",
+    "eventName": "INSERT",
+    "eventVersion": "1.1",
+    "eventSource": "aws:dynamodb",
+    "awsRegion": "us-east-1",
+    "dynamodb": {
+        "ApproximateCreationDateTime": 1608586864,
+        "Keys": {
+            "orderOwner": {
+                "S": "aidanh"
+            },
+            "orderId": {
+                "S": "22588fbe-ebc6-4ca1-be22-dd4f856a0483"
+            }
+        },
+        "NewImage": {
+            "lastName": {
+                "S": "H"
+            },
+            "addr2": {
+                "S": ""
+            },
+            "addr1": {
+                "S": "2116 Fall Creek Dr"
+            },
+            "orderId": {
+                "S": "22588fbe-ebc6-4ca1-be22-dd4f856a0483"
+            },
+            "checkNumbers": {
+                "S": ""
+            },
+            "checkPaid": {
+                "N": "0"
+            },
+            "productsCost": {
+                "N": "192"
+            },
+            "products": {
+                "M": {
+                    "bags": {
+                        "N": "24"
+                    },
+                    "spreading": {
+                        "N": "24"
+                    }
+                }
+            },
+            "doCollectMoneyLater": {
+                "BOOL": true
+            },
+            "orderOwner": {
+                "S": "aidanh"
+            },
+            "firstName": {
+                "S": "Craig"
+            },
+            "cashPaid": {
+                "N": "0"
+            },
+            "deliveryId": {
+                "S": "1"
+            },
+            "totalAmt": {
+                "N": "242"
+            },
+            "phone": {
+                "S": "555-867-5309"
+            },
+            "specialInstructions": {
+                "S": ""
+            },
+            "donation": {
+                "N": "50"
+            },
+            "neighborhood": {
+                "S": "Round Rock"
+            },
+            "email": {
+                "S": ""
+            }
+        },
+        "SequenceNumber": "129166700000000000991060825",
+        "SizeBytes": 360,
+        "StreamViewType": "NEW_AND_OLD_IMAGES"
+    },
+    "eventSourceARN": "arn:aws:dynamodb:us-east-1:573208353427:table/T27FundraiserOrders/stream/2020-12-14T05:25:34.957"
+},
+{
+    "eventID": "ec88808b0ec6b1e5bfbf45ecfb0612db",
+    "eventName": "INSERT",
+    "eventVersion": "1.1",
+    "eventSource": "aws:dynamodb",
+    "awsRegion": "us-east-1",
+    "dynamodb": {
+        "ApproximateCreationDateTime": 1608586864,
+        "Keys": {
+            "orderOwner": {
+                "S": "williama"
+            },
+            "orderId": {
+                "S": "22588fbe-ebc6-4ca1-ffff-dd4f856a0483"
+            }
+        },
+        "NewImage": {
+            "lastName": {
+                "S": "H"
+            },
+            "addr2": {
+                "S": ""
+            },
+            "addr1": {
+                "S": "2118 Fall Creek Dr"
+            },
+            "orderId": {
+                "S": "22588fbe-ebc6-4ca1-ffff-dd4f856a0483"
+            },
+            "checkNumbers": {
+                "S": ""
+            },
+            "checkPaid": {
+                "N": "0"
+            },
+            "productsCost": {
+                "N": "192"
+            },
+            "products": {
+                "M": {
+                    "bags": {
+                        "N": "24"
+                    },
+                    "spreading": {
+                        "N": "24"
+                    }
+                }
+            },
+            "doCollectMoneyLater": {
+                "BOOL": true
+            },
+            "orderOwner": {
+                "S": "aidanh"
+            },
+            "firstName": {
+                "S": "Craig"
+            },
+            "cashPaid": {
+                "N": "0"
+            },
+            "deliveryId": {
+                "S": "1"
+            },
+            "totalAmt": {
+                "N": "242"
+            },
+            "phone": {
+                "S": "555-867-5309"
+            },
+            "specialInstructions": {
+                "S": ""
+            },
+            "donation": {
+                "N": "50"
+            },
+            "neighborhood": {
+                "S": "Round Rock"
+            },
+            "email": {
+                "S": ""
+            }
+        },
+        "SequenceNumber": "129166700000000000991060825",
+        "SizeBytes": 360,
+        "StreamViewType": "NEW_AND_OLD_IMAGES"
+    },
+    "eventSourceARN": "arn:aws:dynamodb:us-east-1:573208353427:table/T27FundraiserOrders/stream/2020-12-14T05:25:34.957"
+}
+]

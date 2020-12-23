@@ -25,6 +25,8 @@ fr_config = None
 patrols = None
 summary = None
 TROOP_ORDER_OWNER = 'troop27summary'
+DEFAULT_PATROL = 'DEFAULT_PATROL'
+patrol_names = [DEFAULT_PATROL]
 
 ############################
 #
@@ -40,12 +42,15 @@ async def load_fr_config(s3):
 ############################
 #
 async def load_patrol_map(s3):
-    global patrols
+    global patrols, patrol_names
 
     if not patrols:
         print("Loading patrol map from s3")
         obj = s3.Object('t27fundraiser', 'T27FundraiserUserMap.json')
         patrols = json.loads(obj.get()['Body'].read())
+        for patrol in patrols.keys():
+            patrol_names.append(patrol)
+        #print(json.dumps(patrols, indent=2))
 
 ############################
 #
@@ -61,6 +66,8 @@ async def load_summary(table):
                 if 'orderOwner'==k: continue
                 if 'amountSold'==k or 'donation'==k:
                     resp['Items'][idx][k] = float(item[k])
+                elif 'isPatrol'==k or 'isTroop'==k:
+                    continue
                 else:
                     resp['Items'][idx][k] = int(item[k])
 
@@ -81,7 +88,7 @@ async def load_cache_data(s3, db):
 def extract_vals(dbrec, image):
     vals = {
         "orderOwner": dbrec['Keys']['orderOwner']['S'],
-        "amountSold": float(image['amountTotal']['N']),
+        "amountSold": float(image['totalAmt']['N']),
         "donation": 0.0,
     }
 
@@ -89,26 +96,18 @@ def extract_vals(dbrec, image):
         vals['bags'] = 0
         vals['spreading'] = 0
 
-    for k,v in image['orderByDelivery']['M'].items():
-        if 'donation'==k:
-            vals['donation'] = vals['donation'] + float(v['M']['amountDue']['N'])
+    if "donation" in image:
+        vals['donation'] = vals['donation'] + float(image["donation"]['N'])
 
-            if 'mulch' != fr_config['kind']:
-                # Only care about donations and not sure if not mulch specific
-                # so break if we get a donation and it isn't mulch
-                break
-            continue
-
-        if 'mulch' != fr_config['kind']:
-            continue
-
+    if 'mulch' == fr_config['kind'] and "products" in image:
         #This is mulch so we need to get spreading and bags
-        items = v['M']['items']['M']
-        if 'bags' in items:
-            vals['bags'] = vals['bags'] + int(items['bags']['N'])
+        products = image['products']['M']
 
-        if 'spreading' in items:
-            vals['spreading'] = vals['spreading'] + int(items['spreading']['N'])
+        if 'bags' in products:
+            vals['bags'] = vals['bags'] + int(products['bags']['N'])
+
+        if 'spreading' in products:
+            vals['spreading'] = vals['spreading'] + int(products['spreading']['N'])
 
     return(vals)
 
@@ -153,6 +152,12 @@ def get_summaries(owner, patrol, troop):
         if 'mulch' == fr_config['kind']:
             defaults['bags'] = 0
             defaults['spreading'] = 0
+
+        if owner_id in patrol_names:
+            defaults['isPatrol'] = True
+        if TROOP_ORDER_OWNER == owner_id:
+            defaults['isTroop'] = True
+
         return defaults
 
 
@@ -219,7 +224,7 @@ def get_patrol_name(order_owner):
     for name, members in patrols.items():
         if order_owner in members:
             return(name)
-    return('DEFAULT')
+    return(DEFAULT_PATROL)
 
 
 ############################
@@ -247,16 +252,53 @@ def process_record(table, rec):
 
     summaries = get_summaries(order_owner, get_patrol_name(order_owner), TROOP_ORDER_OWNER)
 
-    for summary in summaries:
-        process_owner_summary_changes(table, summary, old_vals, new_vals)
+    for a_summary in summaries:
+        process_owner_summary_changes(table, a_summary, old_vals, new_vals)
 
     return True
 
 
 ############################
 #
-def generate_summary_report():
-    pass
+def generate_summary_report(s3):
+    def populate_entry(sum_item):
+        entry = {
+            "amountSold": sum_item['amountSold'],
+            "donation": sum_item['donation']
+        }
+        if 'mulch' == fr_config['kind']:
+            entry['spreading'] = sum_item['spreading']
+            entry['bags'] = sum_item['bags']
+        return entry
+
+    s3_summary = {
+        'patrols': {},
+        'troop': {},
+        'users': []
+    }
+
+    for a_summary in summary:
+        if 'isPatrol' in a_summary:
+            s3_summary['patrols'][a_summary['orderOwner']] = populate_entry(a_summary)
+        elif 'isTroop' in a_summary:
+            s3_summary['troop'] = populate_entry(a_summary)
+        else:
+            if 0.0 < a_summary['amountSold']:
+                entry = populate_entry(a_summary)
+                entry['orderOwner'] = a_summary['orderOwner']
+                s3_summary['users'].append(entry)
+
+    s3_summary['users'].sort(key=lambda x: x['amountSold'], reverse=True)
+    s3_summary['users'] = s3_summary['users'][0:10]
+
+    #out = json.dumps(s3_summary, indent=2, default=json_default_encoder)
+    #print(f"****************\n{out}\n*******************")
+
+    s3_summary = json.dumps(s3_summary, indent=2, default=json_default_encoder)
+    obj = s3.Object('t27fundraiser', 'T27FundraiserLeaderBoard.json')
+    response = obj.put(ACL='private',Body=s3_summary)
+
+
 
 ############################
 #
@@ -274,7 +316,7 @@ def handle_event(event):
         if process_record(table, rec): is_summary_changed = True
 
     if is_summary_changed:
-        generate_summary_report()
+        generate_summary_report(s3)
 
 #################################
 ##
@@ -284,17 +326,8 @@ def lambda_handler(event, context):
 #################################
 ##
 if __name__ == '__main__':
-    #for fn in ['OnInsert', 'OnInsert2', 'OnRemove', 'OnInsert3', 'OnInsert4', 'OnModify']:
-    if False:
-        for fn in ['OnInsert', 'OnInsert2']:
-            with open(f"{fn}.json", 'rb') as f:
-                handle_event({ "Records": [json.load(f)] })
-                out = json.dumps(summary, indent=2, default=json_default_encoder)
-                print(f"****************\n{out}\n*******************")
-
-    if True:
-        for fn in ['OnRemove', 'OnInsert3', 'OnInsert4', 'OnModify']:
-            with open(f"{fn}.json", 'rb') as f:
-                handle_event({ "Records": [json.load(f)] })
-                out = json.dumps(summary, indent=2, default=json_default_encoder)
-                print(f"****************\n{out}\n*******************")
+    for fn in ['OnInsert', 'OnInsert2', 'OnInsert3', 'OnInsert4', 'OnRemove']:
+        with open(f"{fn}.json", 'rb') as f:
+            handle_event({ "Records": json.load(f) })
+            # out = json.dumps(summary, indent=2, default=json_default_encoder)
+            # print(f"****************\n{out}\n*******************")
