@@ -347,6 +347,7 @@ def lambda_handler(event, context):
 #################################
 ##
 if __name__ == '__main__':
+    import time
     # for fn in ['OnInsert', 'OnInsert2', 'OnInsert3', 'OnInsert4', 'OnRemove']:
     #     with open(f"{fn}.json", 'rb') as f:
     #         handle_event({ "Records": json.load(f) })
@@ -414,6 +415,9 @@ if __name__ == '__main__':
                 )
 
     # Main Logic
+
+    tic = time.perf_counter()
+
     print("Clearing Summary Table")
     clear_summary_db()
 
@@ -437,3 +441,6 @@ if __name__ == '__main__':
 
     print("Generating Summary Table")
     generate_summary_report(s3)
+
+    toc = time.perf_counter()
+    print(f"Downloaded the tutorial in {toc - tic:0.4f} seconds")
