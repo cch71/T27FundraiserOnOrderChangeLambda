@@ -326,8 +326,60 @@ def lambda_handler(event, context):
 #################################
 ##
 if __name__ == '__main__':
-    for fn in ['OnInsert', 'OnInsert2', 'OnInsert3', 'OnInsert4', 'OnRemove']:
-        with open(f"{fn}.json", 'rb') as f:
-            handle_event({ "Records": json.load(f) })
-            # out = json.dumps(summary, indent=2, default=json_default_encoder)
-            # print(f"****************\n{out}\n*******************")
+    # for fn in ['OnInsert', 'OnInsert2', 'OnInsert3', 'OnInsert4', 'OnRemove']:
+    #     with open(f"{fn}.json", 'rb') as f:
+    #         handle_event({ "Records": json.load(f) })
+    s3 = boto3.resource('s3')
+    db = boto3.resource('dynamodb')
+    table = db.Table('T27FundraiserSummary')
+    summary = []
+
+    async def load_cache_for_local(s3):
+        await asyncio.gather(
+            load_fr_config(s3),
+            load_patrol_map(s3))
+
+     # Load cache data from different sources
+    asyncio.run(load_cache_for_local(s3))
+
+    def extract_db_val(order):
+        vals = {
+            "orderOwner": order['orderOwner'],
+            "amountSold": float(order['totalAmt']),
+            "donation": 0.0,
+        }
+
+        if 'mulch' == fr_config['kind']:
+            vals['bags'] = 0
+            vals['spreading'] = 0
+
+        if "donation" in order:
+            vals['donation'] = vals['donation'] + float(order["donation"])
+
+        if 'mulch' == fr_config['kind'] and "products" in order:
+            #This is mulch so we need to get spreading and bags
+            products = order['products']
+
+            if 'bags' in products:
+                vals['bags'] = vals['bags'] + int(products['bags'])
+
+            if 'spreading' in products:
+                vals['spreading'] = vals['spreading'] + int(products['spreading'])
+
+        return vals
+
+    orders = None
+    with open('DynamoDbOrdersArchive.json', 'rb') as f:
+        orders = json.load(f)
+
+    for order in orders:
+        new_vals = extract_db_val(order)
+        #print(f"Rec:\n{json.dumps(new_vals, indent=2)}\n")
+
+        order_owner = order['orderOwner']
+        summaries = get_summaries(order_owner, get_patrol_name(order_owner), TROOP_ORDER_OWNER)
+
+        for a_summary in summaries:
+            process_owner_summary_changes(table, a_summary, None, new_vals)
+
+        generate_summary_report(s3)
