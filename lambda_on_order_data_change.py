@@ -27,6 +27,7 @@ summary = None
 TROOP_ORDER_OWNER = 'troop27summary'
 DEFAULT_PATROL = 'DEFAULT_PATROL'
 patrol_names = [DEFAULT_PATROL]
+summary_db_item_changes = []
 
 ############################
 #
@@ -114,7 +115,8 @@ def extract_vals(dbrec, image):
 
 ############################
 #
-def add_or_insert(table, a_summary_item):
+def add_or_insert(a_summary_item):
+    global summary_db_item_changes
     update_expr = []
     expr_attr = {}
     for k, v in a_summary_item.items():
@@ -126,18 +128,15 @@ def add_or_insert(table, a_summary_item):
 
     #print(f"Update Expr: {update_expr}")
     #print(f"ExprAttr: {json.dumps(expr_attr, default=json_default_encoder)}")
-    try:
-        table.update_item(
-            Key={
-                'orderOwner': a_summary_item['orderOwner']
-            },
-            UpdateExpression=update_expr,
-            ExpressionAttributeValues=expr_attr,
-            ReturnValues="NONE"
-        )
-    except ClientError as e:
-        print(e.response['Error']['Message'])
-        raise
+    params = {
+        'Key': {
+            'orderOwner': a_summary_item['orderOwner']
+        },
+        'UpdateExpression': update_expr,
+        'ExpressionAttributeValues': expr_attr,
+        'ReturnValues': "NONE"
+    }
+    summary_db_item_changes.append(params)
 
 ############################
 #
@@ -192,7 +191,7 @@ def no_needed_vals_changed(old, new):
 
 ############################
 #
-def process_owner_summary_changes(table, summary_tuple, old_vals, new_vals):
+def process_owner_summary_changes(summary_tuple, old_vals, new_vals):
     global summary
 
     owner_summary, idx = summary_tuple
@@ -215,7 +214,7 @@ def process_owner_summary_changes(table, summary_tuple, old_vals, new_vals):
         summary.append(owner_summary)
     else:
         summary[idx] = owner_summary
-    add_or_insert(table, owner_summary)
+    add_or_insert(owner_summary)
 
 
 ############################
@@ -229,7 +228,7 @@ def get_patrol_name(order_owner):
 
 ############################
 #
-def process_record(table, rec):
+def process_record(rec):
     #print(f"Stream Record: {json.dumps(record, default=json_default_encoder)}")
     op = rec['eventName']
     dbrec = rec['dynamodb']
@@ -253,7 +252,7 @@ def process_record(table, rec):
     summaries = get_summaries(order_owner, get_patrol_name(order_owner), TROOP_ORDER_OWNER)
 
     for a_summary in summaries:
-        process_owner_summary_changes(table, a_summary, old_vals, new_vals)
+        process_owner_summary_changes(a_summary, old_vals, new_vals)
 
     return True
 
@@ -298,6 +297,23 @@ def generate_summary_report(s3):
     obj = s3.Object('t27fundraiser', 'T27FundraiserLeaderBoard.json')
     response = obj.put(ACL='private',Body=s3_summary)
 
+############################
+#
+def update_summary_db(table):
+    globa lsummary_db_item_changes
+
+    if len summary_db_item_changes:
+        return;
+    try:
+        with table.batch_writer() as batch:
+            for item in summary_db_item_changes:
+                table.update_item(**item)
+    except ClientError as e:
+        print(e.response['Error']['Message'])
+        raise
+    finally:
+        summary_db_item_changes = []
+
 
 
 ############################
@@ -313,7 +329,9 @@ def handle_event(event):
     #print(json.dumps(event, indent=2, default=json_default_encoder))
     is_summary_changed = False
     for rec in event['Records']:
-        if process_record(table, rec): is_summary_changed = True
+        if process_record(rec): is_summary_changed = True
+
+    update_summary_db(table)
 
     if is_summary_changed:
         generate_summary_report(s3)
@@ -368,10 +386,22 @@ if __name__ == '__main__':
 
         return vals
 
+    def clear_summary_db():
+        resp = table.scan()
+        with table.batch_writer() as batch:
+            for item in resp['Items']:
+                batch.delete_item(
+                    Key={
+                        'orderOwner': item['orderOwner'],
+                        'orderId': item['orderId']
+                    }
+                )
+
     orders = None
     with open('DynamoDbOrdersArchive.json', 'rb') as f:
         orders = json.load(f)
 
+    clear_summary_db()
     for order in orders:
         new_vals = extract_db_val(order)
         #print(f"Rec:\n{json.dumps(new_vals, indent=2)}\n")
@@ -381,5 +411,7 @@ if __name__ == '__main__':
 
         for a_summary in summaries:
             process_owner_summary_changes(table, a_summary, None, new_vals)
+
+        update_summary_db(table)
 
         generate_summary_report(s3)
