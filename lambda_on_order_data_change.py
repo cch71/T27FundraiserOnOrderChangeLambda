@@ -300,14 +300,17 @@ def generate_summary_report(s3):
 ############################
 #
 def update_summary_db(table):
-    globa lsummary_db_item_changes
+    global summary_db_item_changes
 
-    if len summary_db_item_changes:
+    if 0 == len(summary_db_item_changes):
         return;
+
     try:
         with table.batch_writer() as batch:
             for item in summary_db_item_changes:
                 table.update_item(**item)
+        print(f"Processed {len(summary_db_item_changes)} Summary Db Changes");
+
     except ClientError as e:
         print(e.response['Error']['Message'])
         raise
@@ -360,6 +363,19 @@ if __name__ == '__main__':
      # Load cache data from different sources
     asyncio.run(load_cache_for_local(s3))
 
+
+    def get_orders():
+        # with open('DynamoDbOrdersArchive.json', 'rb') as f:
+        #     return json.load(f)
+        order_table = db.Table('T27FundraiserOrders')
+        response = order_table.scan()
+        return response['Items']
+
+    def save_orders(orders):
+        with open('DynamoDbOrdersArchive.json', 'w') as outfile:
+            json.dump(orders, outfile, default=json_default_encoder)
+
+
     def extract_db_val(order):
         vals = {
             "orderOwner": order['orderOwner'],
@@ -390,18 +406,21 @@ if __name__ == '__main__':
         resp = table.scan()
         with table.batch_writer() as batch:
             for item in resp['Items']:
+                print(f"Clearing Old Rec: {item['orderOwner']}")
                 batch.delete_item(
                     Key={
-                        'orderOwner': item['orderOwner'],
-                        'orderId': item['orderId']
+                        'orderOwner': item['orderOwner']
                     }
                 )
 
-    orders = None
-    with open('DynamoDbOrdersArchive.json', 'rb') as f:
-        orders = json.load(f)
-
+    # Main Logic
+    print("Clearing Summary Table")
     clear_summary_db()
+
+    print("Getting Orders")
+    orders = get_orders()
+    save_orders(orders)
+
     for order in orders:
         new_vals = extract_db_val(order)
         #print(f"Rec:\n{json.dumps(new_vals, indent=2)}\n")
@@ -410,8 +429,11 @@ if __name__ == '__main__':
         summaries = get_summaries(order_owner, get_patrol_name(order_owner), TROOP_ORDER_OWNER)
 
         for a_summary in summaries:
-            process_owner_summary_changes(table, a_summary, None, new_vals)
+            process_owner_summary_changes(a_summary, None, new_vals)
+    print(f"Processed {len(orders)} orders")
 
-        update_summary_db(table)
+    print("Updating Summary Db")
+    update_summary_db(table)
 
-        generate_summary_report(s3)
+    print("Generating Summary Table")
+    generate_summary_report(s3)
