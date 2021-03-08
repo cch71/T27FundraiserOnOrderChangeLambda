@@ -288,7 +288,7 @@ def generate_summary_report(s3):
                 s3_summary['users'].append(entry)
 
     s3_summary['users'].sort(key=lambda x: x['amountSold'], reverse=True)
-    s3_summary['users'] = s3_summary['users'][0:10]
+    s3_summary['users'] = s3_summary['users']
 
     #out = json.dumps(s3_summary, indent=2, default=json_default_encoder)
     #print(f"****************\n{out}\n*******************")
